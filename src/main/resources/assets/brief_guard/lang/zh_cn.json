@@ -1,0 +1,12 @@
+{
+  "item.brief_guard.leather_briefs": "皮革内裤",
+  "item.brief_guard.copper_briefs": "氧化铜内裤",
+  "item.brief_guard.chain_briefs": "锁链内裤",
+  "item.brief_guard.iron_briefs": "铁内裤",
+  "item.brief_guard.gold_briefs": "黄金内裤",
+  "item.brief_guard.diamond_briefs": "钻石内裤",
+  "item.brief_guard.netherite_briefs": "下界合金内裤",
+  "tooltip.brief_guard.leather_slot": "装备栏：头盔栏",
+  "tooltip.brief_guard.underwear_slot": "装备栏：独立内裤栏，不占用胸甲栏",
+  "tooltip.brief_guard.attack": "手持攻击伤害：+%s（甜浆果丛伤害类型）"
+}
