@@ -3,15 +3,11 @@ package cn.blockforge.generated.briefguard.client;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
-import net.minecraft.client.model.geom.builders.CubeDeformation;
-import net.minecraft.client.model.geom.builders.CubeListBuilder;
-import net.minecraft.client.model.geom.builders.LayerDefinition;
-import net.minecraft.client.model.geom.builders.MeshDefinition;
-import net.minecraft.client.model.geom.builders.PartDefinition;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.client.model.geom.builders.*;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 
-/** Lower-body armor shell used by the player render layer. */
-public final class BriefsModel<T extends LivingEntity> extends HumanoidModel<T> {
+/** 下体护甲外壳,由玩家渲染层使用。26.2 模型统一以 EntityRenderState 为类型参数。 */
+public final class BriefsModel extends HumanoidModel<AvatarRenderState> {
     public BriefsModel(ModelPart root) {
         super(root);
     }
@@ -19,8 +15,9 @@ public final class BriefsModel<T extends LivingEntity> extends HumanoidModel<T> 
     public static LayerDefinition createLayer() {
         MeshDefinition mesh = new MeshDefinition();
         PartDefinition root = mesh.getRoot();
-        root.addOrReplaceChild("head", CubeListBuilder.create(), PartPose.ZERO);
-        root.addOrReplaceChild("hat", CubeListBuilder.create(), PartPose.ZERO);
+        // 26.2: HumanoidModel 构造从 head.getChild("hat") 取帽子,hat 必须挂在 head 下
+        PartDefinition head = root.addOrReplaceChild("head", CubeListBuilder.create(), PartPose.ZERO);
+        head.addOrReplaceChild("hat", CubeListBuilder.create(), PartPose.ZERO);
         PartDefinition body = root.addOrReplaceChild("body", CubeListBuilder.create()
                 .texOffs(0, 0)
                 .addBox(-4.15F, 0.0F, -2.25F, 8.3F, 4.2F, 4.5F, new CubeDeformation(0.16F)), PartPose.ZERO);

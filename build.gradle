@@ -14,8 +14,8 @@ repositories {
     // Loom adds the essential maven repositories automatically.
 }
 
-tasks.withType(JavaCompile) {
-    options.compilerArgs << "-Xmaxerrs" << "10000"
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-Xmaxerrs" << "10000" << "-Xlint:deprecation"
 }
 
 dependencies {
@@ -45,9 +45,10 @@ java {
     targetCompatibility = JavaVersion.VERSION_25
 }
 
+def archivesBaseName = base.archivesName
 jar {
     from("LICENSE") {
-        rename { "${it}_${project.base.archivesName}" }
+        rename { "${it}_${archivesBaseName.get()}" }
     }
 }
 

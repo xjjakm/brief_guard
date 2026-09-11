@@ -1,36 +1,35 @@
 package cn.blockforge.generated.briefguard;
 
-import net.fabricmc.fabric.api.entity.event.v1.EntityDataSaver;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Fabric replacement for the Forge Capability system.
- * Stores the worn underwear ItemStack in the player's persistent NBT via EntityDataSaver.
+ * 26.2 中 Fabric 的 EntityDataSaver 已删除。
+ * 改为注册实体 DataComponent(随玩家存档持久化,天然支持 ItemStack codec)。
+ * 客户端呈现用的数据由 {@link BriefsNetwork} 的 S2C 包写进本地玩家。
  */
 public final class BriefsData {
-    private static final String KEY = "BriefGuardUnderwear";
+    public static final DataComponentType<ItemStack> UNDERWEAR = DataComponentType.<ItemStack>builder()
+            .persistent(ItemStack.CODEC)
+            .cacheEncoding()
+            .build();
 
     private BriefsData() {}
 
+    public static void register() {
+        Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, BriefGuardMod.id("underwear"), UNDERWEAR);
+    }
+
     public static ItemStack getStack(Player player) {
-        CompoundTag nbt = ((EntityDataSaver) player).getNbt();
-        if (nbt.contains(KEY)) {
-            return ItemStack.of(nbt.getCompound(KEY));
-        }
-        return ItemStack.EMPTY;
+        ItemStack stack = player.get(UNDERWEAR);
+        return stack == null ? ItemStack.EMPTY : stack;
     }
 
     public static void setStack(Player player, ItemStack stack) {
-        CompoundTag nbt = ((EntityDataSaver) player).getNbt();
-        if (stack.isEmpty()) {
-            nbt.remove(KEY);
-        } else {
-            CompoundTag itemTag = new CompoundTag();
-            stack.save(itemTag);
-            nbt.put(KEY, itemTag);
-        }
+        player.setComponent(UNDERWEAR, stack == null ? ItemStack.EMPTY : stack);
     }
 
     public static void copy(Player from, Player to) {

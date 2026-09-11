@@ -1,0 +1,12 @@
+{
+  "item.brief_guard.leather_briefs": "Leather Briefs",
+  "item.brief_guard.copper_briefs": "Copper Briefs",
+  "item.brief_guard.chain_briefs": "Chainmail Briefs",
+  "item.brief_guard.iron_briefs": "Iron Briefs",
+  "item.brief_guard.gold_briefs": "Gold Briefs",
+  "item.brief_guard.diamond_briefs": "Diamond Briefs",
+  "item.brief_guard.netherite_briefs": "Netherite Briefs",
+  "tooltip.brief_guard.leather_slot": "Equip slot: Helmet",
+  "tooltip.brief_guard.underwear_slot": "Equip slot: dedicated underwear slot (does not take the chestplate slot)",
+  "tooltip.brief_guard.attack": "Attack damage when held: +%s (sweet berry bush damage type)"
+}

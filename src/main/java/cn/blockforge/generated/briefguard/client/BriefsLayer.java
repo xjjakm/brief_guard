@@ -1,66 +1,85 @@
 package cn.blockforge.generated.briefguard.client;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.model.PlayerModel;
-import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.entity.RenderLayerParent;
-import net.minecraft.client.renderer.entity.layers.RenderLayer;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.ItemStack;
+import cn.blockforge.generated.briefguard.BriefGuardMod;
 import cn.blockforge.generated.briefguard.BriefsArmorItem;
 import cn.blockforge.generated.briefguard.BriefsData;
 import cn.blockforge.generated.briefguard.BriefsMaterialKind;
-import cn.blockforge.generated.briefguard.BriefGuardMod;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
-/** Renders only the custom lower-body shell, leaving the player's skin and armor visible. */
-public final class BriefsLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
-    private final BriefsModel<AbstractClientPlayer> model;
+/**
+ * 只渲染自定义的下体护甲外壳,保留玩家皮肤与盔甲。
+ * 26.2 渲染管线:层实现 submit() 提交 SubmitNodeCollector;姿态通过 Fabric 混入的
+ * FabricModel.copyTransforms() 从父玩家模型整树递归复制。
+ */
+public final class BriefsLayer extends RenderLayer<AvatarRenderState, PlayerModel> {
+    private final BriefsModel model;
 
-    public BriefsLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent,
-                       BriefsModel<AbstractClientPlayer> model) {
+    public BriefsLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent, BriefsModel model) {
         super(parent);
         this.model = model;
     }
 
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource buffer, int packedLight, AbstractClientPlayer player,
-                       float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks,
-                       float netHeadYaw, float headPitch) {
-        ItemStack stack = BriefsData.getStack(player);
+    public void submit(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords,
+                       AvatarRenderState state, float yRot, float xRot) {
+        ItemStack stack = dataStack(state);
         BriefsArmorItem briefs = stack.getItem() instanceof BriefsArmorItem item ? item : null;
         if (briefs == null) {
-            stack = player.getItemBySlot(EquipmentSlot.HEAD);
+            stack = state.headEquipment;
             briefs = stack.getItem() instanceof BriefsArmorItem item ? item : null;
             if (briefs == null || briefs.kind() != BriefsMaterialKind.LEATHER) return;
         }
 
-        PlayerModel<AbstractClientPlayer> parent = getParentModel();
-        parent.copyPropertiesTo(model);
-        model.head.copyFrom(parent.head);
-        model.body.copyFrom(parent.body);
-        model.rightArm.copyFrom(parent.rightArm);
-        model.leftArm.copyFrom(parent.leftArm);
-        model.rightLeg.copyFrom(parent.rightLeg);
-        model.leftLeg.copyFrom(parent.leftLeg);
-        model.hat.copyFrom(parent.hat);
-        model.setAllVisible(false);
-        model.body.visible = true;
-        model.body.getChild("front_panel").visible = true;
-        model.rightLeg.visible = true;
-        model.leftLeg.visible = true;
+        // 继承父玩家模型姿态(复制整棵模型的变换与子部件)
+        this.model.copyTransforms(this.getParentModel());
+        this.model.head.visible = false;
+        this.model.hat.visible = false;
+        this.model.body.visible = true;
+        this.model.rightArm.visible = false;
+        this.model.leftArm.visible = false;
+        this.model.rightLeg.visible = true;
+        this.model.leftLeg.visible = true;
+        this.model.body.getChild("front_panel").visible = true;
 
-        ResourceLocation texture = texture(briefs.kind());
-        VertexConsumer vertex = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
-        model.renderToBuffer(poseStack, vertex, packedLight, OverlayTexture.NO_OVERLAY,
-                1.0F, 1.0F, 1.0F, 1.0F);
+        submitNodeCollector.order(1)
+                .submitModel(
+                        this.model,
+                        state,
+                        poseStack,
+                        RenderTypes.entityCutout(texture(briefs.kind())),
+                        lightCoords,
+                        LivingEntityRenderer.getOverlayCoords(state, 0.0F),
+                        -1,
+                        null,
+                        state.outlineColor,
+                        null
+                );
     }
 
-    private static ResourceLocation texture(BriefsMaterialKind kind) {
+    /** 优先读数据组件(自定义内衣槽);组件未同步到客户端时回退到头盔槽。 */
+    private static ItemStack dataStack(AvatarRenderState state) {
+        Level level = Minecraft.getInstance().level;
+        if (level == null) return ItemStack.EMPTY;
+        Entity entity = level.getEntity(state.id);
+        if (!(entity instanceof Player player)) return ItemStack.EMPTY;
+        ItemStack stack = BriefsData.getStack(player);
+        return stack == null ? ItemStack.EMPTY : stack;
+    }
+
+    private static Identifier texture(BriefsMaterialKind kind) {
         return BriefGuardMod.id("textures/entity/briefs/" + kind.name().toLowerCase(java.util.Locale.ROOT) + ".png");
     }
 }
