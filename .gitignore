@@ -1,3 +1,13 @@
-# 项目排除路径
-/.gradle/
-/build/
+.git/
+.gradle/
+.settings/
+bin/
+build/
+run/
+.classpath
+.project
+
+
+
+src/test/
+.idea/
