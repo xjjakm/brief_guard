@@ -53,7 +53,9 @@ public final class BriefGuardMod implements ModInitializer {
         Item.Properties properties = new Item.Properties()
                 .durability(durability)
                 .enchantable(material.enchantmentValue())
-                .setId(key);
+                .setId(key)
+                // 内裤单件不可堆叠:避免 placeItemBackInInventory 把旧内裤合并进背包里已有的同款堆
+                .stacksTo(1);
         if (material.repairTag() != null) properties = properties.repairable(material.repairTag());
         if (fireResistant) properties = properties.fireResistant();
         // 皮革内裤默认穿在头上:配 EQUIPPABLE(HEAD) 使原版盔甲槽 mayPlace 放行(物品栏可拖入头部槽)。

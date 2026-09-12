@@ -21,11 +21,9 @@ import net.minecraft.world.level.Level;
 import java.util.Locale;
 import java.util.function.Consumer;
 
-/**
- * 26.2 中 ArmorItem 已移除,改为普通 Item + DataComponents 组件。
- * 装备槽/属性和耐久全部通过组件烘焙,特殊"内衣槽"逻辑仍然走 {@link BriefsData}。
- */
+/** 排查日志统一用此 Logger,日志关键词 [BriefGuard]。 */
 public final class BriefsArmorItem extends Item {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("BriefGuard");
     private final BriefsMaterial material;
     private final BriefsMaterialKind kind;
 
@@ -68,25 +66,42 @@ public final class BriefsArmorItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
+        if (hand == InteractionHand.OFF_HAND) return InteractionResult.PASS;
         ItemStack held = player.getItemInHand(hand);
-        if (level.isClientSide()) return InteractionResult.CONSUME;
 
         if (!usesUnderwearSlot()) {
-            // 皮革:装备到头盔槽
-            ItemStack previous = player.getItemBySlot(EquipmentSlot.HEAD);
+            // 皮革:装备到头盔槽(对齐原版 Equippable.swapWithEquipmentSlot 交换语义)
+            ItemStack worn = player.getItemBySlot(EquipmentSlot.HEAD);
+            if (!worn.isEmpty() && ItemStack.isSameItemSameComponents(worn, held)) {
+                return InteractionResult.PASS;
+            }
             player.setItemSlot(EquipmentSlot.HEAD, held.split(1));
-            if (!previous.isEmpty()) player.getInventory().placeItemBackInInventory(previous);
-        } else {
-            // 其它:装备到自定义内衣槽
-            ItemStack previous = BriefsData.getStack(player);
-            BriefsData.setStack(player, held.split(1));
-            if (!previous.isEmpty()) player.getInventory().placeItemBackInInventory(previous);
+            if (!level.isClientSide()) {
+                player.playSound(material.equipSound().value(), 1.0F, 1.0F);
+                BriefsEvents.refreshAttributes(player);
+                if (player instanceof ServerPlayer serverPlayer) BriefsNetwork.sync(serverPlayer);
+                LOGGER.info("[BriefGuard] use() leather: held={} worn={} -> nowHead={}",
+                        held, worn, player.getItemBySlot(EquipmentSlot.HEAD));
+            }
+            return worn.isEmpty() ? InteractionResult.SUCCESS
+                    : InteractionResult.SUCCESS.heldItemTransformedTo(worn.copy());
         }
 
-        player.playSound(material.equipSound().value(), 1.0F, 1.0F);
-        BriefsEvents.refreshAttributes(player);
-        if (player instanceof ServerPlayer serverPlayer) BriefsNetwork.sync(serverPlayer);
-        return InteractionResult.CONSUME;
+        // 其它:装备到自定义内裤栏(同样对齐 swap 语义,旧内裤回手持选中槽)
+        ItemStack worn = BriefsData.getStack(player);
+        if (!worn.isEmpty() && ItemStack.isSameItemSameComponents(worn, held)) {
+            return InteractionResult.PASS;
+        }
+        BriefsData.setStack(player, held.split(1));
+        if (!level.isClientSide()) {
+            player.playSound(material.equipSound().value(), 1.0F, 1.0F);
+            BriefsEvents.refreshAttributes(player);
+            if (player instanceof ServerPlayer serverPlayer) BriefsNetwork.sync(serverPlayer);
+            LOGGER.info("[BriefGuard] use() briefs: held={} worn={} -> nowWorn={}",
+                    held, worn, BriefsData.getStack(player));
+        }
+        return worn.isEmpty() ? InteractionResult.SUCCESS
+                : InteractionResult.SUCCESS.heldItemTransformedTo(worn.copy());
     }
 
     /** 26.2 中 Item.appendHoverText 被 @Deprecated 但无新替代签名(官方物品仍按此覆写),故压制告警。 */

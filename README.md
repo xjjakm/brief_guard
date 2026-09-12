@@ -28,8 +28,13 @@
 
 ### 装备方式
 
-- **皮革内裤**：装备在**头盔栏**（作为兜帽头饰）。
-- **其他内裤**：装备在**独立内裤栏**，不占用胸甲栏（自动同步到客户端，Shift + 右键空手可脱下）。
+- **皮革内裤**：装备在**头盔栏**（作为兜帽头饰）。右键穿戴；因带有 `EQUIPPABLE(HEAD)` 组件，也支持直接从物品栏拖入头部盔甲槽。
+- **其他内裤**：装备在**独立内裤栏**，不占用胸甲栏。
+  - 生存模式：内裤栏位于物品栏中**副手栏上方**；创造模式：位于**护腿槽旁**。
+  - 右键内裤（或从物品栏拖入内裤栏）穿戴，点按内裤栏取出脱下。
+  - 内裤栏数据随玩家存档经 `CUSTOM_DATA` 持久化，客户端/服务端自动同步。
+  - 创造模式物品栏仅同步客户端显示，内裤栏的增删通过自定义 C2S 网络包推给服务端刷新属性。
+  - 空槽位显示内裤像素图标 + 原版风格灰色槽位底板。
 
 ### 被动效果（穿戴时）
 
@@ -60,15 +65,22 @@
 
 ```
 src/main/java/cn/blockforge/generated/briefguard
-├── BriefGuardMod.java        # 入口：材质/物品注册、事件绑定
+├── BriefGuardMod.java        # 入口：材质/物品注册、事件绑定、用 EQUIPPABLE 组件放行皮革头部槽
 ├── BriefsArmorItem.java      # 物品：普通 Item + DataComponents(属性/装备组件)
 ├── BriefsMaterial.java       # 材质数据记录
 ├── BriefsMaterialKind.java   # 种类：攻击属性与被动效果
-├── BriefsData.java           # 独立内裤栏：实体数据组件持久化
+├── BriefsData.java           # 独立内裤栏：CUSTOM_DATA 持久化（RegistryOps + ItemStack.CODEC）
+├── BriefsSlot.java           # 内裤栏槽位：读写玩家内裤数据、刷新属性、触发网络同步
 ├── BriefsEvents.java         # 被动效果/战斗/掉落事件
-├── BriefsNetwork.java        # 客户端↔服务端同步
+├── BriefsNetwork.java        # C2S/S2C 内裤栏变更同步
+├── BriefsCreative.java       # 「内裤守卫」创意分类标签页（图标：钻石内裤）
+├── mixin/
+│   ├── MixinInventoryMenu.java            # 生存菜单注入内裤栏槽位
+│   ├── MixinCreativeModeInventoryScreen.java # 创造模式槽位坐标调整
+│   ├── MixinAbstractContainerScreen.java  # 渲染时补画原版槽位底板
+│   └── AbstractContainerMenuAccessor.java # 暴露父类 addSlot 供菜单注入
 └── client/
-    ├── BriefsClient.java     # 渲染层注册、脱裤子快捷键
+    ├── BriefsClient.java     # 渲染层注册
     ├── BriefsLayer.java      # 穿戴模型渲染层（submit 节点提交）
     └── BriefsModel.java      # 下体护甲外壳模型（挂接 HumanoidModel 骨架）
 ```
@@ -76,4 +88,5 @@ src/main/java/cn/blockforge/generated/briefguard
 ## 许可证
 
 原项目使用ARR许可证，这个项目使用GNU通用公共许可证v3
+
 ![image](https://www.gnu.org/graphics/gplv3-127x51.png)

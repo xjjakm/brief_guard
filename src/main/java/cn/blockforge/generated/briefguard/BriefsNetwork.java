@@ -17,6 +17,8 @@ import net.minecraft.world.item.ItemStack;
  * 包类型必须先通过 PayloadTypeRegistry 注册,再注册 handler。
  */
 public final class BriefsNetwork {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("BriefGuard");
+
     private BriefsNetwork() {}
 
     // ---- S2C: sync worn underwear to client ----
@@ -29,18 +31,6 @@ public final class BriefsNetwork {
                 ItemStack.OPTIONAL_STREAM_CODEC,
                 SyncPayload::stack,
                 SyncPayload::new);
-
-        @Override
-        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-
-    // ---- C2S: client requests removal of worn underwear ----
-    public record RemovePayload() implements CustomPacketPayload {
-        public static final CustomPacketPayload.Type<RemovePayload> TYPE =
-                new CustomPacketPayload.Type<>(BriefGuardMod.id("remove"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, RemovePayload> CODEC = StreamCodec.unit(new RemovePayload());
 
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
@@ -66,7 +56,6 @@ public final class BriefsNetwork {
     @SuppressWarnings("unused")
     public static void init() {
         // 注册包类型(必须在 handler 之前)
-        PayloadTypeRegistry.serverboundPlay().register(RemovePayload.TYPE, RemovePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(SetStackPayload.TYPE, SetStackPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SyncPayload.TYPE, SyncPayload.CODEC);
 
@@ -75,24 +64,11 @@ public final class BriefsNetwork {
             Player local = context.client().player;
             if (local == null) return;
             Entity entity = local.level().getEntity(payload.entityId());
+            LOGGER.info("[BriefGuard] S2C sync received entityId={} stack={}", payload.entityId(), payload.stack());
             if (entity instanceof Player target) {
                 BriefsData.setStack(target, payload.stack());
             }
         }));
-
-        // C2S receiver (server side)
-        ServerPlayNetworking.registerGlobalReceiver(RemovePayload.TYPE, (payload, context) -> {
-            ServerPlayer player = context.player();
-            context.server().execute(() -> {
-                ItemStack worn = BriefsData.getStack(player);
-                if (!worn.isEmpty()) {
-                    BriefsData.setStack(player, ItemStack.EMPTY);
-                    player.getInventory().placeItemBackInInventory(worn);
-                    BriefsEvents.refreshAttributes(player);
-                    sync(player);
-                }
-            });
-        });
 
         // C2S receiver:创造 UI 的内裤槽改动(客户端无服务器容器流程)。
         // 只在创造模式接受,且只接受空栈或单件内裤,防止生存模式走私物品。
@@ -100,6 +76,8 @@ public final class BriefsNetwork {
             ServerPlayer player = context.player();
             context.server().execute(() -> {
                 ItemStack stack = payload.stack();
+                LOGGER.info("[BriefGuard] C2S set_stack received uuid={} instabuild={} stack={}",
+                        player.getUUID(), player.getAbilities().instabuild, stack);
                 if (!player.getAbilities().instabuild) return;
                 if (!stack.isEmpty() && (stack.getCount() != 1 || !(stack.getItem() instanceof BriefsArmorItem))) return;
                 BriefsData.setStack(player, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
