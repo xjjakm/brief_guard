@@ -1,35 +1,45 @@
 package cn.blockforge.generated.briefguard;
 
-import net.minecraft.core.Registry;
-import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 
 /**
- * 26.2 中 Fabric 的 EntityDataSaver 已删除。
- * 改为注册实体 DataComponent(随玩家存档持久化,天然支持 ItemStack codec)。
- * 客户端呈现用的数据由 {@link BriefsNetwork} 的 S2C 包写进本地玩家。
+ * 26.2 中实体 setComponent 只处理 CUSTOM_NAME / CUSTOM_DATA 两个隐式组件,
+ * 自定义 DataComponentType 写入实体会被静默丢弃。
+ * 故改用内置 {@link DataComponents#CUSTOM_DATA}(CustomData) 存 NBT:
+ * 会随实体存档持久化;客户端呈现用数据由 {@link BriefsNetwork} 的 S2C 包写进本地玩家。
  */
 public final class BriefsData {
-    public static final DataComponentType<ItemStack> UNDERWEAR = DataComponentType.<ItemStack>builder()
-            .persistent(ItemStack.CODEC)
-            .cacheEncoding()
-            .build();
+    /** customData 里存放内裤的键。 */
+    private static final String KEY = "Underwear";
 
     private BriefsData() {}
 
-    public static void register() {
-        Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, BriefGuardMod.id("underwear"), UNDERWEAR);
-    }
-
     public static ItemStack getStack(Player player) {
-        ItemStack stack = player.get(UNDERWEAR);
-        return stack == null ? ItemStack.EMPTY : stack;
+        CustomData data = player.get(DataComponents.CUSTOM_DATA);
+        if (data == null || data.isEmpty()) return ItemStack.EMPTY;
+        CompoundTag tag = data.copyTag();
+        if (!tag.contains(KEY)) return ItemStack.EMPTY;
+        return ItemStack.CODEC.parse(registryOps(player), tag.get(KEY))
+                .result().orElse(ItemStack.EMPTY);
     }
 
     public static void setStack(Player player, ItemStack stack) {
-        player.setComponent(UNDERWEAR, stack == null ? ItemStack.EMPTY : stack);
+        CompoundTag tag = CustomData.EMPTY.copyTag();
+        if (stack != null && !stack.isEmpty()) {
+            tag.put(KEY, ItemStack.CODEC.encodeStart(registryOps(player), stack).result().orElse(new CompoundTag()));
+        }
+        player.setComponent(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    private static RegistryOps<Tag> registryOps(Player player) {
+        return RegistryOps.create(NbtOps.INSTANCE, player.level().registryAccess());
     }
 
     public static void copy(Player from, Player to) {

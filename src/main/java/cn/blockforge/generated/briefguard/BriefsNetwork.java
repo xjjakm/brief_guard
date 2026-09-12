@@ -48,10 +48,26 @@ public final class BriefsNetwork {
         }
     }
 
+    // ---- C2S: client pushes worn-underwear change made in the creative UI ----
+    public record SetStackPayload(ItemStack stack) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SetStackPayload> TYPE =
+                new CustomPacketPayload.Type<>(BriefGuardMod.id("set_stack"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SetStackPayload> CODEC = StreamCodec.composite(
+                ItemStack.OPTIONAL_STREAM_CODEC,
+                SetStackPayload::stack,
+                SetStackPayload::new);
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     @SuppressWarnings("unused")
     public static void init() {
         // 注册包类型(必须在 handler 之前)
         PayloadTypeRegistry.serverboundPlay().register(RemovePayload.TYPE, RemovePayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(SetStackPayload.TYPE, SetStackPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SyncPayload.TYPE, SyncPayload.CODEC);
 
         // S2C receiver (client side)
@@ -77,6 +93,30 @@ public final class BriefsNetwork {
                 }
             });
         });
+
+        // C2S receiver:创造 UI 的内裤槽改动(客户端无服务器容器流程)。
+        // 只在创造模式接受,且只接受空栈或单件内裤,防止生存模式走私物品。
+        ServerPlayNetworking.registerGlobalReceiver(SetStackPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            context.server().execute(() -> {
+                ItemStack stack = payload.stack();
+                if (!player.getAbilities().instabuild) return;
+                if (!stack.isEmpty() && (stack.getCount() != 1 || !(stack.getItem() instanceof BriefsArmorItem))) return;
+                BriefsData.setStack(player, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
+                BriefsEvents.refreshAttributes(player);
+                sync(player);
+            });
+        });
+    }
+
+    /**
+     * 客户端在创造模式 UI 中改动内裤槽后,把改动推给服务端。
+     * 方法内按环境守卫:专属服务器不会执行到 ClientPlayNetworking,不会加载客户端类。
+     */
+    public static void notifyServerStackChange(ItemStack stack) {
+        if (net.fabricmc.api.EnvType.CLIENT == net.fabricmc.loader.api.FabricLoader.getInstance().getEnvironmentType()) {
+            ClientPlayNetworking.send(new SetStackPayload(stack));
+        }
     }
 
     public static void sync(ServerPlayer player) {

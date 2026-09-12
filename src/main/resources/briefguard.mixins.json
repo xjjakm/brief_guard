@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cn.blockforge.generated.briefguard.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractContainerMenuAccessor",
+    "MixinInventoryMenu"
+  ],
+  "client": [
+    "MixinAbstractContainerScreen",
+    "MixinCreativeModeInventoryScreen"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

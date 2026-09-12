@@ -15,6 +15,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 
 public final class BriefGuardMod implements ModInitializer {
@@ -55,15 +56,15 @@ public final class BriefGuardMod implements ModInitializer {
                 .setId(key);
         if (material.repairTag() != null) properties = properties.repairable(material.repairTag());
         if (fireResistant) properties = properties.fireResistant();
+        // 皮革内裤默认穿在头上:配 EQUIPPABLE(HEAD) 使原版盔甲槽 mayPlace 放行(物品栏可拖入头部槽)。
+        // 其它内裤走自定义内裤栏,不配 EQUIPPABLE,避免被拖进原版盔甲槽。
+        if (kind == BriefsMaterialKind.LEATHER) properties = properties.equippable(EquipmentSlot.HEAD);
         return register(key, new BriefsArmorItem(material, kind, properties));
     }
 
     @SuppressWarnings("unused")
     @Override
     public void onInitialize() {
-        // 实体数据组件注册(替代已删除的 Fabric EntityDataSaver)
-        BriefsData.register();
-
         // Networking
         BriefsNetwork.init();
 

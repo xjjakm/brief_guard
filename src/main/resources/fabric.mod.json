@@ -9,6 +9,9 @@
   "license": "All Rights Reserved",
   "icon": "assets/brief_guard/textures/item/leather_briefs.png",
   "environment": "*",
+  "mixins": [
+    "briefguard.mixins.json"
+  ],
   "entrypoints": {
     "main": ["cn.blockforge.generated.briefguard.BriefGuardMod"],
     "client": ["cn.blockforge.generated.briefguard.client.BriefsClient"]
