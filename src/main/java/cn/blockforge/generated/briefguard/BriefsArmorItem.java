@@ -4,6 +4,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -21,9 +22,7 @@ import net.minecraft.world.level.Level;
 import java.util.Locale;
 import java.util.function.Consumer;
 
-/** 排查日志统一用此 Logger,日志关键词 [BriefGuard]。 */
 public final class BriefsArmorItem extends Item {
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("BriefGuard");
     private final BriefsMaterial material;
     private final BriefsMaterialKind kind;
 
@@ -64,6 +63,12 @@ public final class BriefsArmorItem extends Item {
         return kind.usesBriefsSlot();
     }
 
+    /** 服务端音效广播：except=null 使装备者也听得到(Player.playSound 会排除自身)。 */
+    private static void sound(Player player, SoundEvent sound, float volume, float pitch) {
+        if (player == null) return;
+        player.level().playSound(null, player.getX(), player.getY(), player.getZ(), sound, player.getSoundSource(), volume, pitch);
+    }
+
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
         if (hand == InteractionHand.OFF_HAND) return InteractionResult.PASS;
@@ -77,11 +82,9 @@ public final class BriefsArmorItem extends Item {
             }
             player.setItemSlot(EquipmentSlot.HEAD, held.split(1));
             if (!level.isClientSide()) {
-                player.playSound(material.equipSound().value(), 1.0F, 1.0F);
+                sound(player,material.equipSound().value(), 1.0F, 1.0F);
                 BriefsEvents.refreshAttributes(player);
                 if (player instanceof ServerPlayer serverPlayer) BriefsNetwork.sync(serverPlayer);
-                LOGGER.info("[BriefGuard] use() leather: held={} worn={} -> nowHead={}",
-                        held, worn, player.getItemBySlot(EquipmentSlot.HEAD));
             }
             return worn.isEmpty() ? InteractionResult.SUCCESS
                     : InteractionResult.SUCCESS.heldItemTransformedTo(worn.copy());
@@ -94,11 +97,9 @@ public final class BriefsArmorItem extends Item {
         }
         BriefsData.setStack(player, held.split(1));
         if (!level.isClientSide()) {
-            player.playSound(material.equipSound().value(), 1.0F, 1.0F);
+            sound(player,material.equipSound().value(), 1.0F, 1.0F);
             BriefsEvents.refreshAttributes(player);
             if (player instanceof ServerPlayer serverPlayer) BriefsNetwork.sync(serverPlayer);
-            LOGGER.info("[BriefGuard] use() briefs: held={} worn={} -> nowWorn={}",
-                    held, worn, BriefsData.getStack(player));
         }
         return worn.isEmpty() ? InteractionResult.SUCCESS
                 : InteractionResult.SUCCESS.heldItemTransformedTo(worn.copy());
@@ -115,5 +116,9 @@ public final class BriefsArmorItem extends Item {
             builder.accept(Component.translatable("tooltip.brief_guard.underwear_slot"));
         }
         builder.accept(Component.translatable("tooltip.brief_guard.attack", String.format(Locale.ROOT, "%.1f", kind.attackDamage())));
+        if (kind != BriefsMaterialKind.LEATHER) {
+            builder.accept(Component.translatable("tooltip.brief_guard.mechanic"));
+            builder.accept(Component.translatable("tooltip.brief_guard.m_" + kind.name().toLowerCase(Locale.ROOT)));
+        }
     }
 }

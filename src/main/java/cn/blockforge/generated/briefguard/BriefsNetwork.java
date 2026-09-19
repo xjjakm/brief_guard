@@ -17,8 +17,6 @@ import net.minecraft.world.item.ItemStack;
  * 包类型必须先通过 PayloadTypeRegistry 注册,再注册 handler。
  */
 public final class BriefsNetwork {
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("BriefGuard");
-
     private BriefsNetwork() {}
 
     // ---- S2C: sync worn underwear to client ----
@@ -64,7 +62,6 @@ public final class BriefsNetwork {
             Player local = context.client().player;
             if (local == null) return;
             Entity entity = local.level().getEntity(payload.entityId());
-            LOGGER.info("[BriefGuard] S2C sync received entityId={} stack={}", payload.entityId(), payload.stack());
             if (entity instanceof Player target) {
                 BriefsData.setStack(target, payload.stack());
             }
@@ -76,8 +73,6 @@ public final class BriefsNetwork {
             ServerPlayer player = context.player();
             context.server().execute(() -> {
                 ItemStack stack = payload.stack();
-                LOGGER.info("[BriefGuard] C2S set_stack received uuid={} instabuild={} stack={}",
-                        player.getUUID(), player.getAbilities().instabuild, stack);
                 if (!player.getAbilities().instabuild) return;
                 if (!stack.isEmpty() && (stack.getCount() != 1 || !(stack.getItem() instanceof BriefsArmorItem))) return;
                 BriefsData.setStack(player, stack.isEmpty() ? ItemStack.EMPTY : stack.copy());

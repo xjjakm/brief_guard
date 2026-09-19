@@ -1,26 +1,40 @@
 package cn.blockforge.generated.briefguard;
 
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.EntityHitResult;
 import org.jspecify.annotations.Nullable;
 
 /**
  * 所有游戏事件(从 Forge EventBus 移植到 Fabric 回调)。
+ *
+ * <p>26.2 事件分工：
+ * <ul>
+ *   <li>{@code ALLOW_DAMAGE}　：完全取消型（火焰/闪电免疫、贞操带格挡）</li>
+ *   <li>{@code AFTER_DAMAGE}　：受击反应（粪/蠹虫/活塞/气体）</li>
+ *   <li>{@code AFTER_DEATH}　：击杀效果（金粒掉落、晋升经验）</li>
+ *   <li>{@code MixinLivingEntity}：改伤害数值（SHIELD 减伤）、坠落（SLIME/POOP）</li>
+ *   <li>{@code UseItemCallback}：空手右键主动技能（辣条喷火、可食用回血）</li>
+ * </ul>
  */
 public final class BriefsEvents {
     private static final Identifier ATTACK_DAMAGE_ID = BriefGuardMod.id("briefs.attack_damage");
@@ -33,25 +47,14 @@ public final class BriefsEvents {
     private BriefsEvents() {}
 
     /** 每个服务器 tick:被动效果。 */
+    @SuppressWarnings("unused")
     public static void onServerTick(net.minecraft.server.MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            BriefsMaterialKind kind = wornKind(player);
-
-            // Netherite: lava swim + fire particles
-            if (kind == BriefsMaterialKind.NETHERITE && player.isInLava()) {
-                player.clearFire();
-                if (player.getDeltaMovement().y < 0.05D) {
-                    player.setDeltaMovement(player.getDeltaMovement().x, 0.05D, player.getDeltaMovement().z);
-                }
-                if (player.tickCount % 4 == 0) {
-                    player.level().addParticle(ParticleTypes.FLAME,
-                            player.getX() + (player.getRandom().nextDouble() - 0.5D), player.getY() + 0.3D,
-                            player.getZ() + (player.getRandom().nextDouble() - 0.5D), 0.0D, 0.03D, 0.0D);
-                }
-            }
+            // 机制引擎每玩家 tick(含 NETHERITE 岩浆漂浮)
+            BriefsMechanic.tick(player);
 
             // Gold: villager discount
-            if (kind == BriefsMaterialKind.GOLD && player.containerMenu instanceof MerchantMenu menu) {
+            if (wornKind(player) == BriefsMaterialKind.GOLD && player.containerMenu instanceof MerchantMenu menu) {
                 for (MerchantOffer offer : menu.getOffers()) {
                     offer.setSpecialPriceDiff(Math.min(offer.getSpecialPriceDiff(), -3));
                 }
@@ -59,26 +62,66 @@ public final class BriefsEvents {
         }
     }
 
-    /** LivingAttackEvent:取消闪电(铜)和火焰(下界合金)伤害。 */
-    public static boolean onLivingAttack(LivingEntity entity, net.minecraft.world.damagesource.DamageSource source) {
+    /** ALLOW_DAMAGE:返回 true 表示「应取消本次伤害」。 */
+    public static boolean onLivingAttack(LivingEntity entity, DamageSource source) {
         if (!(entity instanceof Player player)) return false;
         BriefsMaterialKind kind = wornKind(player);
-        return (kind == BriefsMaterialKind.COPPER && source.is(DamageTypeTags.IS_LIGHTNING))
-                || (kind == BriefsMaterialKind.NETHERITE && source.is(DamageTypeTags.IS_FIRE));
+        if (kind == null) return false;
+        // 基础款：铜免闪电、下界合金/龙首免火焰。
+        if (kind == BriefsMaterialKind.COPPER && source.is(DamageTypeTags.IS_LIGHTNING)) return true;
+        if ((kind == BriefsMaterialKind.NETHERITE || kind == BriefsMaterialKind.DRAGON_HEAD)
+                && source.is(DamageTypeTags.IS_FIRE)) return true;
+        // 贞操带：守护层完全格挡。
+        return BriefsMechanic.tryBlockWithGuard(player);
     }
 
-    /** AttackEntityCallback:手持内衣造成甜浆果伤害;铜内衣命中附加缓慢并进入冷却。 */
+    /** AFTER_DAMAGE:受击反应(粪/蠹虫/活塞/气体)。 */
     @SuppressWarnings("unused")
-    public static net.minecraft.world.InteractionResult onAttackEntity(Player player, net.minecraft.world.level.Level level, net.minecraft.world.InteractionHand hand, net.minecraft.world.entity.Entity target, net.minecraft.world.phys.@Nullable EntityHitResult hitResult) {
-        if (level.isClientSide() || !(target instanceof LivingEntity livingTarget)) return net.minecraft.world.InteractionResult.PASS;
+    public static void onLivingHurt(LivingEntity entity, DamageSource source,
+                                    float baseDamageTaken, float damageTaken, boolean blocked) {
+        if (!(entity instanceof Player player)) return;
+        BriefsMechanic.damageWorn(player, baseDamageTaken); // 内裤栏耐久损耗(对齐原版 max(1, damage/4))
+        BriefsMechanic.onHurt(player, source);
+    }
+
+    /** AFTER_DEATH:实体死亡后触发(金粒掉落 + 晋升经验)。 */
+    @SuppressWarnings("unused")
+    public static void onLivingDeath(LivingEntity entity, DamageSource source) {
+        if (!(source.getEntity() instanceof Player player)) return;
+        if (!(entity.level() instanceof ServerLevel serverLevel)) return;
+        ItemStack worn = wornStack(player);
+        if (!(worn.getItem() instanceof BriefsArmorItem item)) return;
+        if (item.kind() == BriefsMaterialKind.GOLD && player.getRandom().nextFloat() < 0.35F) {
+            entity.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                    entity.level(), entity.getX(), entity.getY(), entity.getZ(),
+                    new ItemStack(Items.GOLD_NUGGET, 1 + player.getRandom().nextInt(3))));
+        } else if (item.kind() == BriefsMaterialKind.PROMOTION) {
+            // 晋升：击杀额外掉落 1.5 倍经验 + 1，累积军阶。
+            int xp = entity.getExperienceReward(serverLevel, player);
+            ExperienceOrb.award(serverLevel, entity.position(), (int) (xp * 1.5F) + 1);
+            BriefsMechanic.onKill(player, worn);
+        }
+    }
+
+    /** ALLOW_DEATH 兜底：本项目不取消死亡。 */
+    public static boolean onLivingDeathCancel(LivingEntity entity, DamageSource source) {
+        return false;
+    }
+
+    /** AttackEntityCallback:手持内衣造成甜浆果伤害;机制攻击 + 铜内衣缓慢附加。 */
+    @SuppressWarnings("unused")
+    public static InteractionResult onAttackEntity(Player player, Level level, InteractionHand hand,
+                                                   Entity target, @Nullable EntityHitResult hitResult) {
+        if (level.isClientSide() || !(target instanceof LivingEntity livingTarget)) return InteractionResult.PASS;
 
         // Holding briefs in main hand: cancel normal attack, deal custom damage
-        if (player.getMainHandItem().getItem() instanceof BriefsArmorItem) {
+        boolean held = player.getMainHandItem().getItem() instanceof BriefsArmorItem;
+        if (held) {
             float damage = (float) (player.getAttributeValue(Attributes.ATTACK_DAMAGE) * player.getAttackStrengthScale(0.5F));
             if (damage > 0.0F) {
-                livingTarget.hurtServer((net.minecraft.server.level.ServerLevel) level, level.damageSources().sweetBerryBush(), damage);
+                livingTarget.hurtServer((ServerLevel) level, level.damageSources().sweetBerryBush(), damage);
             }
-            return net.minecraft.world.InteractionResult.CONSUME;
+            return InteractionResult.CONSUME;
         }
 
         // Copper briefs worn: slowness on hit with cooldown
@@ -89,18 +132,22 @@ public final class BriefsEvents {
             player.getCooldowns().addCooldown(copperStack, 60);
         }
 
-        return net.minecraft.world.InteractionResult.PASS;
+        // 机制攻击(龙首爆燃/辣条引燃/剑型旋风/盾击/活塞击退/活版门背刺/触手拉拽)
+        BriefsMechanic.onAttack(player, livingTarget);
+
+        return InteractionResult.PASS;
     }
 
-    /** LivingDeathEvent:金内衣 → 35% 概率掉落金粒。 */
-    public static boolean onLivingDeath(LivingEntity entity, net.minecraft.world.damagesource.DamageSource source) {
-        if (source.getEntity() instanceof Player player && wornKind(player) == BriefsMaterialKind.GOLD) {
-            if (player.getRandom().nextFloat() < 0.35F) {
-                entity.level().addFreshEntity(new ItemEntity(entity.level(), entity.getX(), entity.getY(), entity.getZ(),
-                        new ItemStack(Items.GOLD_NUGGET, 1 + player.getRandom().nextInt(3))));
-            }
-        }
-        return false; // don't cancel death
+    /** UseBlockCallback:空主手右键触发主动技能(辣条喷火/可食用回血)。
+     * 走 useItemOn HEAD 注入,Fabric 对所有右键(含空手瞄准空气)都触发此回调。 */
+    @SuppressWarnings("unused")
+    public static InteractionResult onUseBlockActive(Player player, Level level, InteractionHand hand,
+                                                     net.minecraft.world.phys.BlockHitResult hitResult) {
+        if (level.isClientSide()) return InteractionResult.PASS;
+        if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
+        if (!player.getMainHandItem().isEmpty()) return InteractionResult.PASS;
+        BriefsMechanic.activeRightClick(player);
+        return InteractionResult.PASS;
     }
 
     /** Player clone (death/return from end):复制内衣数据。 */
@@ -124,12 +171,17 @@ public final class BriefsEvents {
     }
 
     @Nullable
-    private static BriefsMaterialKind wornKind(Player player) {
-        ItemStack head = player.getItemBySlot(EquipmentSlot.HEAD);
+    static ItemStack wornStack(Player player) {
+        ItemStack head = player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD);
         if (head.getItem() instanceof BriefsArmorItem headBriefs && headBriefs.kind() == BriefsMaterialKind.LEATHER) {
-            return BriefsMaterialKind.LEATHER;
+            return head;
         }
-        ItemStack worn = BriefsData.getStack(player);
+        return BriefsData.getStack(player);
+    }
+
+    @Nullable
+    public static BriefsMaterialKind wornKind(Player player) {
+        ItemStack worn = wornStack(player);
         return worn.getItem() instanceof BriefsArmorItem briefs ? briefs.kind() : null;
     }
 

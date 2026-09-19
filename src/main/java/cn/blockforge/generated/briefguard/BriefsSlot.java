@@ -16,8 +16,6 @@ public final class BriefsSlot extends Slot {
     /** 在玩家物品栏菜单中的槽位索引(附手栏 45 之后)。 */
     public static final int SLOT_INDEX = 46;
 
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("BriefGuard");
-
     private final Player owner;
 
     public BriefsSlot(Player owner, int x, int y) {
@@ -39,7 +37,6 @@ public final class BriefsSlot extends Slot {
     public void set(ItemStack stack) {
         ItemStack next = stack == null ? ItemStack.EMPTY : stack.copy();
         if (ItemStack.matches(next, BriefsData.getStack(owner))) return; // 菜单回显等无变化写入,直接跳过
-        LOGGER.info("[BriefGuard] slot.set() cur={} -> next={}", BriefsData.getStack(owner), next);
         BriefsData.setStack(owner, next);
         afterChange(next);
     }
@@ -48,7 +45,6 @@ public final class BriefsSlot extends Slot {
     public void setByPlayer(ItemStack stack, ItemStack previous) {
         ItemStack next = stack == null ? ItemStack.EMPTY : stack.copy();
         if (ItemStack.matches(next, BriefsData.getStack(owner))) return;
-        LOGGER.info("[BriefGuard] slot.setByPlayer() cur={} -> next={}", BriefsData.getStack(owner), next);
         BriefsData.setStack(owner, next);
         afterChange(next);
     }
@@ -59,7 +55,6 @@ public final class BriefsSlot extends Slot {
         if (current.isEmpty()) return ItemStack.EMPTY;
         ItemStack removed = current.copy();
         removed.setCount(amount > 0 && removed.getCount() > amount ? amount : removed.getCount());
-        LOGGER.info("[BriefGuard] slot.remove() cur={} amount={}", current, amount);
         BriefsData.setStack(owner, ItemStack.EMPTY);
         afterChange(ItemStack.EMPTY);
         return removed;

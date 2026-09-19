@@ -39,5 +39,20 @@ public final class BriefsCreative {
         output.accept(new ItemStack(BriefGuardMod.GOLD_BRIEFS));
         output.accept(new ItemStack(BriefGuardMod.DIAMOND_BRIEFS));
         output.accept(new ItemStack(BriefGuardMod.NETHERITE_BRIEFS));
+        // 扩展：十四种机制内裤
+        output.accept(new ItemStack(BriefGuardMod.DRAGON_HEAD_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.CHASTITY_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.SLIME_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.SPICY_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.POOP_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.SILVERFISH_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.TENTACLE_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.EDIBLE_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.TRAPDOOR_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.PROMOTION_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.STICKY_PISTON_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.GASEOUS_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.SWORD_BRIEFS));
+        output.accept(new ItemStack(BriefGuardMod.SHIELD_BRIEFS));
     }
 }

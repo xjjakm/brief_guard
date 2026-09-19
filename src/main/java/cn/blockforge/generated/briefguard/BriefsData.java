@@ -37,11 +37,11 @@ public final class BriefsData {
     }
 
     public static void setStack(Player player, ItemStack stack) {
-        String caller = Thread.currentThread().getStackTrace().length >= 3
-                ? Thread.currentThread().getStackTrace()[2].getClassName() + "#" + Thread.currentThread().getStackTrace()[2].getMethodName()
-                : "?";
-        org.slf4j.LoggerFactory.getLogger("BriefGuard").info(
-                "[BriefGuard] setStack caller={} stack={}", caller, stack);
+        setStackQuiet(player, stack);
+    }
+
+    /** 无日志版本:机制 tick 内高频写回时使用,避免刷日志。 */
+    public static void setStackQuiet(Player player, ItemStack stack) {
         CompoundTag tag = CustomData.EMPTY.copyTag();
         if (stack != null && !stack.isEmpty()) {
             tag.put(KEY, ItemStack.CODEC.encodeStart(registryOps(player), stack).result().orElse(new CompoundTag()));

@@ -3,10 +3,10 @@
   "id": "brief_guard",
   "version": "${version}",
   "name": "内裤防具与装备系统",
-  "description": "七种可穿戴内裤防具，包含独立内裤栏、材质被动效果、三角合成和穿戴模型。",
-  "authors": ["AutoMods"],
+  "description": "14种可穿戴内裤防具，包含独立内裤栏、材质被动效果、三角合成和穿戴模型。",
+  "authors": ["chxjj"],
   "contact": {},
-  "license": "All Rights Reserved",
+  "license": "GPL-v3",
   "icon": "assets/brief_guard/textures/item/leather_briefs.png",
   "environment": "*",
   "mixins": [
